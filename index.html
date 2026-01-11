@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qveris 智能生活仪表盘</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { text-align: center; padding: 30px 0; }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; background: linear-gradient(90deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .clock { font-size: 1.5em; color: #667eea; margin-bottom: 5px; }
+        .date { color: #888; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; padding: 20px 0; }
+        .card {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 10px 40px rgba(102, 126, 234, 0.2); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .card-header h2 { font-size: 1.2em; display: flex; align-items: center; gap: 10px; }
+        .card-header i { color: #667eea; }
+        .refresh-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; }
+        .refresh-btn:hover { background: rgba(102, 126, 234, 0.3); }
+        .loading { text-align: center; padding: 30px; color: #888; }
+        .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .api-badge { font-size: 0.7em; background: rgba(102, 126, 234, 0.3); padding: 2px 8px; border-radius: 10px; margin-left: 8px; }
+        
+        /* 天气样式 */
+        .weather-location { text-align: center; font-size: 1.2em; margin-bottom: 10px; }
+        .weather-main { text-align: center; font-size: 3em; margin: 15px 0; }
+        .weather-desc { text-align: center; font-size: 1.1em; color: #ddd; margin-bottom: 20px; }
+        .weather-details { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .weather-detail { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px; text-align: center; }
+        .weather-detail-label { font-size: 0.8em; color: #aaa; margin-bottom: 5px; }
+        .weather-detail-value { font-size: 1.1em; font-weight: bold; }
+        
+        /* 股票样式 */
+        .stock-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .stock-name { font-size: 1.3em; font-weight: bold; margin-bottom: 5px; }
+        .stock-price { font-size: 2em; font-weight: bold; color: #667eea; }
+        .stock-change { font-size: 1em; margin-left: 10px; }
+        .stock-details { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .stock-detail { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; text-align: center; }
+        .stock-detail-label { font-size: 0.75em; color: #aaa; }
+        .stock-detail-value { font-size: 0.95em; font-weight: bold; margin-top: 3px; }
+        .stock-chart { width: 100%; height: 150px; margin-top: 15px; }
+        
+        /* 新闻样式 */
+        .news-item { background: rgba(255,255,255,0.03); padding: 12px; margin-bottom: 10px; border-radius: 10px; border-left: 3px solid #667eea; cursor: pointer; transition: all 0.3s ease; }
+        .news-item:hover { background: rgba(102, 126, 234, 0.1); }
+        .news-title { font-weight: bold; margin-bottom: 5px; font-size: 0.95em; }
+        .news-meta { font-size: 0.75em; color: #888; display: flex; justify-content: space-between; }
+        
+        /* 汇率样式 */
+        .rate-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 10px; margin-bottom: 8px; }
+        .rate-pair { display: flex; align-items: center; gap: 10px; }
+        .rate-icon { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; font-size: 0.8em; }
+        .rate-value { font-weight: bold; color: #667eea; }
+        
+        /* 位置样式 */
+        .location-item { padding: 10px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+        .location-icon { width: 35px; height: 35px; background: rgba(102, 126, 234, 0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #667eea; }
+        .location-label { font-size: 0.8em; color: #aaa; }
+        .location-value { font-weight: bold; }
+        
+        /* 对话样式 */
+        .chat-container { height: 300px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 10px; margin-bottom: 10px; }
+        .chat-message { margin-bottom: 10px; padding: 10px 15px; border-radius: 15px; max-width: 85%; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .chat-user { background: linear-gradient(135deg, #667eea, #764ba2); margin-left: auto; border-bottom-right-radius: 5px; }
+        .chat-assistant { background: rgba(255,255,255,0.1); margin-right: auto; border-bottom-left-radius: 5px; }
+        .chat-input-container { display: flex; gap: 10px; }
+        .chat-input { flex: 1; padding: 12px 15px; border-radius: 25px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #fff; font-size: 1em; outline: none; }
+        .chat-input:focus { border-color: #667eea; }
+        .chat-btn { background: linear-gradient(135deg, #667eea, #764ba2); border: none; color: #fff; padding: 12px 25px; border-radius: 25px; cursor: pointer; font-size: 1em; transition: all 0.3s ease; }
+        .chat-btn:hover { transform: scale(1.05); box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }
+        .chat-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        /* 图片生成样式 */
+        .image-prompt { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #fff; font-size: 1em; margin-bottom: 10px; resize: vertical; }
+        .image-result { text-align: center; margin-top: 15px; }
+        .generated-image { max-width: 100%; border-radius: 10px; cursor: pointer; }
+        
+        /* 搜索框样式 */
+        .search-container { margin-bottom: 15px; }
+        .search-input { width: 100%; padding: 12px 15px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #fff; font-size: 1em; outline: none; }
+        .search-input:focus { border-color: #667eea; }
+        .tools-list { max-height: 400px; overflow-y: auto; }
+        .tool-item { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 3px solid #667eea; cursor: pointer; transition: all 0.3s ease; }
+        .tool-item:hover { background: rgba(102, 126, 234, 0.1); }
+        .tool-name { font-weight: bold; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
+        .tool-desc { font-size: 0.85em; color: #aaa; margin-bottom: 8px; }
+        .tool-meta { display: flex; gap: 15px; font-size: 0.75em; color: #888; }
+        .tool-meta span { display: flex; align-items: center; gap: 5px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: #1a1a2e; border-radius: 20px; padding: 30px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-close { background: none; border: none; color: #fff; font-size: 1.5em; cursor: pointer; }
+        .modal-body pre { background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; overflow-x: auto; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="clock" id="clock">00:00:00</div>
+            <div class="date" id="date">加载中...</div>
+            <h1>🌐 Qveris 智能生活仪表盘</h1>
+            <p style="color: #888; margin-top: 10px;">基于 Qveris API 的多功能智能助手</p>
+        </div>
+        
+        <div class="grid">
+            <!-- 天气卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-cloud-sun"></i>
+                    <h2>天气预报 <span class="api-badge">WeatherAPI</span></h2>
+                    <button class="refresh-btn" onclick="fetchWeather()"><i class="fas fa-sync-alt"></i></button>
+                </div>
+                <div id="weather-content">
+                    <div class="loading"><div class="spinner"></div><p>加载中...</p></div>
+                </div>
+            </div>
+            
+            <!-- 股票卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-chart-line"></i>
+                    <h2>股票行情 <span class="api-badge">NVDA</span></h2>
+                    <button class="refresh-btn" onclick="fetchStock()"><i class="fas fa-sync-alt"></i></button>
+                </div>
+                <div id="stock-content">
+                    <div class="loading"><div class="spinner"></div><p>加载中...</p></div>
+                </div>
+            </div>
+            
+            <!-- AI对话卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-robot"></i>
+                    <h2>AI 智能助手 <span class="api-badge">Groq</span></h2>
+                </div>
+                <div class="chat-container" id="chat-container">
+                    <div class="chat-message chat-assistant">你好！我是Qveris AI助手，有什么可以帮助你的吗？</div>
+                </div>
+                <div class="chat-input-container">
+                    <input type="text" class="chat-input" id="chat-input" placeholder="输入消息..." onkeypress="if(event.key==='Enter')sendMessage()">
+                    <button class="chat-btn" onclick="sendMessage()" id="chat-btn">发送</button>
+                </div>
+            </div>
+            
+            <!-- 科技新闻卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-newspaper"></i>
+                    <h2>科技新闻 <span class="api-badge">NewsData</span></h2>
+                    <button class="refresh-btn" onclick="fetchNews()"><i class="fas fa-sync-alt"></i></button>
+                </div>
+                <div id="news-content" style="max-height: 300px; overflow-y: auto;">
+                    <div class="loading"><div class="spinner"></div><p>加载中...</p></div>
+                </div>
+            </div>
+            
+            <!-- 汇率卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-money-bill-wave"></i>
+                    <h2>汇率转换 <span class="api-badge">Frankfurter</span></h2>
+                    <button class="refresh-btn" onclick="fetchRates()"><i class="fas fa-sync-alt"></i></button>
+                </div>
+                <div id="rates-content">
+                    <div class="loading"><div class="spinner"></div><p>加载中...</p></div>
+                </div>
+            </div>
+            
+            <!-- 位置卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <h2>位置查询 <span class="api-badge">百度地图</span></h2>
+                    <button class="refresh-btn" onclick="fetchLocation()"><i class="fas fa-sync-alt"></i></button>
+                </div>
+                <div id="location-content">
+                    <div class="loading"><div class="spinner"></div><p>加载中...</p></div>
+                </div>
+            </div>
+            
+            <!-- AI图片生成卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-palette"></i>
+                    <h2>AI 图片生成 <span class="api-badge">智谱AI CogView-3</span></h2>
+                </div>
+                <div style="padding: 10px;">
+                    <div style="margin-bottom: 10px;">
+                        <label style="display: block; color: #aaa; font-size: 0.85em; margin-bottom: 5px;">✨ 描述你想要生成的图片</label>
+                        <textarea id="image-prompt" class="image-prompt" rows="3" placeholder="例如：一只橙色的小猫在草地上玩耍，阳光明媚..."></textarea>
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <label style="display: block; color: #aaa; font-size: 0.85em; margin-bottom: 5px;">📐 图片尺寸</label>
+                        <select id="image-size" style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #fff;">
+                            <option value="1024*1024">1024x1024 (高清正方形)</option>
+                            <option value="768*768">768x768 (中等尺寸)</option>
+                            <option value="512*512">512x512 (快速生成)</option>
+                        </select>
+                    </div>
+                    <button class="chat-btn" style="width: 100%;" onclick="generateImage()">
+                        <i class="fas fa-magic"></i> 生成AI图片
+                    </button>
+                    <p style="font-size: 0.75em; color: #888; text-align: center; margin-top: 8px;">
+                        ⏱️ 可能需要10-30秒，请耐心等待
+                    </p>
+                    <div id="image-result"></div>
+                </div>
+            </div>
+            
+            <!-- API探索器卡片 -->
+            <div class="card" style="grid-column: span 2;">
+                <div class="card-header">
+                    <i class="fas fa-search"></i>
+                    <h2>Qveris API 探索器 <span class="api-badge">发现1000+工具</span></h2>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <div class="search-container">
+                        <input type="text" class="search-input" id="tool-search" placeholder="🔍 搜索工具 (例如: weather, stock, AI, translation, image generation...)" onkeypress="if(event.key==='Enter')searchTools()">
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                        <button class="chat-btn" onclick="searchTools()">
+                            <i class="fas fa-search"></i> 搜索
+                        </button>
+                        <button class="chat-btn" onclick="searchTools('popular')" style="background: rgba(102, 126, 234, 0.3);">
+                            <i class="fas fa-fire"></i> 热门工具
+                        </button>
+                        <button class="chat-btn" onclick="searchTools('weather')" style="background: rgba(0, 184, 148, 0.3);">
+                            <i class="fas fa-cloud"></i> 天气
+                        </button>
+                        <button class="chat-btn" onclick="searchTools('stock')" style="background: rgba(253, 203, 110, 0.3);">
+                            <i class="fas fa-chart-line"></i> 股票
+                        </button>
+                        <button class="chat-btn" onclick="searchTools('AI')" style="background: rgba(155, 89, 182, 0.3);">
+                            <i class="fas fa-robot"></i> AI
+                        </button>
+                        <button class="chat-btn" onclick="searchTools('image')" style="background: rgba(231, 76, 60, 0.3);">
+                            <i class="fas fa-image"></i> 图片
+                        </button>
+                    </div>
+                </div>
+                <div class="tools-list" id="tools-list">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>点击上方按钮或输入关键词搜索工具...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 模态框 -->
+    <div class="modal" id="result-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>工具执行结果</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+    
+    <script>
+        // API配置
+        const API_KEY = 'sk-VeJWtelcfNcqgm6H-V_TfkWX4Or2IyskjXqBvBszQ-k';
+        const BASE_URL = 'https://qveris.ai/api/v1';
+        
+        // 时钟更新
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('date').textContent = now.toLocaleDateString('zh-CN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+        
+        // ========== 天气API ==========
+        async function fetchWeather() {
+            const content = document.getElementById('weather-content');
+            content.innerHTML = '<div class="loading"><div class="spinner"></div><p>加载中...</p></div>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/tools/execute?tool_id=weather_api.current.retrieve.v1.dca6c0f0`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                    body: JSON.stringify({ search_id: '', session_id: '', parameters: { q: 'Beijing', aqi: 'yes' }, max_response_size: 20480 })
+                });
+                const data = await response.json();
+                
+                if (data.success && data.result?.data) {
+                    const w = data.result.data;
+                    const c = w.current;
+                    content.innerHTML = `
+                        <div class="weather-location"><i class="fas fa-map-marker-alt"></i> ${w.location?.name || '北京'}</div>
+                        <div class="weather-main">${getWeatherIcon(c.condition?.text)}</div>
+                        <div class="weather-desc">${c.condition?.text || '未知'}</div>
+                        <div class="weather-details">
+                            <div class="weather-detail"><div class="weather-detail-label">温度</div><div class="weather-detail-value">${Math.round(c.temp_c)}°C</div></div>
+                            <div class="weather-detail"><div class="weather-detail-label">湿度</div><div class="weather-detail-value">${c.humidity}%</div></div>
+                            <div class="weather-detail"><div class="weather-detail-label">风速</div><div class="weather-detail-value">${c.wind_kph} km/h</div></div>
+                            <div class="weather-detail"><div class="weather-detail-label">空气质量</div><div class="weather-detail-value">${c.air_quality?.['us-epa-index'] || '-'}</div></div>
+                        </div>
+                    `;
+                } else {
+                    content.innerHTML = '<p style="text-align: center; color: #ff6b6b;">天气加载失败</p>';
+                }
+            } catch (error) {
+                console.error('Weather error:', error);
+                content.innerHTML = '<p style="text-align: center; color: #ff6b6b;">天气加载失败</p>';
+            }
+        }
+        
+        function getWeatherIcon(condition) {
+            const icons = { 'Sunny': '<i class="fas fa-sun" style="color: #f1c40f;"></i>', 'Clear': '<i class="fas fa-moon" style="color: #9b59b6;"></i>', 'Cloudy': '<i class="fas fa-cloud" style="color: #3498db;"></i>', 'Rain': '<i class="fas fa-cloud-rain" style="color: #2980b9;"></i>', 'Snow': '<i class="fas fa-snowflake" style="color: #ecf0f1;"></i>' };
+            return icons[condition] || '<i class="fas fa-cloud-sun"></i>';
+        }
+        
+        // ========== 股票API ==========
+        async function fetchStock() {
+            const content = document.getElementById('stock-content');
+            content.innerHTML = '<div class="loading"><div class="spinner"></div><p>加载中...</p></div>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/tools/execute?tool_id=financial_modeling_prep.stock.quote.retrieve.v1.822497ca`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                    body: JSON.stringify({ search_id: '', session_id: '', parameters: { symbol: 'NVDA' }, max_response_size: 20480 })
+                });
+                const data = await response.json();
+                
+                if (data.success && data.result?.data?.[0]) {
+                    const s = data.result.data[0];
+                    const change = s.change || 0;
+                    const pct = (s.changePercentage || 0) * 100;
+                    const isUp = change >= 0;
+                    
+                    content.innerHTML = `
+                        <div class="stock-header">
+                            <div>
+                                <div class="stock-name">${s.symbol} - ${s.name || 'NVIDIA'}</div>
+                                <div><span class="stock-price">$${s.price?.toFixed(2) || '--'}</span>
+                                <span class="stock-change" style="color: ${isUp ? '#00b894' : '#ff6b6b'}">${isUp ? '+' : ''}${change.toFixed(2)} (${isUp ? '+' : ''}${pct.toFixed(2)}%)</span></div>
+                            </div>
+                            <i class="fas fa-${isUp ? 'caret-up' : 'caret-down'}" style="font-size: 2em; color: ${isUp ? '#00b894' : '#ff6b6b'}"></i>
+                        </div>
+                        <div class="stock-details">
+                            <div class="stock-detail"><div class="stock-detail-label">开盘</div><div class="stock-detail-value">$${s.open?.toFixed(2) || '-'}</div></div>
+                            <div class="stock-detail"><div class="stock-detail-label">最高</div><div class="stock-detail-value">$${s.dayHigh?.toFixed(2) || '-'}</div></div>
+                            <div class="stock-detail"><div class="stock-detail-label">最低</div><div class="stock-detail-value">$${s.dayLow?.toFixed(2) || '-'}</div></div>
+                            <div class="stock-detail"><div class="stock-detail-label">成交量</div><div class="stock-detail-value">${(s.volume / 1000000).toFixed(1)}M</div></div>
+                        </div>
+                    `;
+                } else {
+                    content.innerHTML = '<p style="text-align: center; color: #ff6b6b;">股票加载失败</p>';
+                }
+            } catch (error) {
+                console.error('Stock error:', error);
+                content.innerHTML = '<p style="text-align: center; color: #ff6b6b;">股票加载失败</p>';
+            }
+        }
+        
+        // ========== AI对话API ==========
+        let chatMessages = [];
+        
+        // 简单的本地回复机器人（备用方案）
+        const localResponses = [
+            "你好！我是Qveris AI助手，很高兴为你服务！",
+            "这个问题很有趣，让我思考一下...",
+            "我可以帮你查询天气、股票、新闻等信息。",
+            "请尝试问我关于科技、生活、投资方面的问题。",
+            "今天天气不错，适合外出散步！",
+            "我可以帮你搜索各种API工具。",
+            "请告诉我你需要什么帮助？",
+            "Qveris平台提供了很多强大的AI工具。",
+            "你感兴趣的话题是什么？",
+            "我可以回答简单的问题，更复杂的问题可能需要更高级的API。"
+        ];
+        
+        function getLocalResponse(message) {
+            const lowerMessage = message.toLowerCase();
+            
+            if (lowerMessage.includes('天气')) return "你可以使用页面上的天气卡片查看北京实时天气！";
+            if (lowerMessage.includes('股票')) return "股票卡片显示NVIDIA的实时行情，请查看上方数据。";
+            if (lowerMessage.includes('新闻')) return "科技新闻每5分钟自动更新一次。";
+            if (lowerMessage.includes('你好') || lowerMessage.includes('hi') || lowerMessage.includes('hello')) return "你好！有什么我可以帮助你的吗？";
+            if (lowerMessage.includes('名字') || lowerMessage.includes('谁')) return "我是Qveris智能助手，基于Qveris AI平台。";
+            if (lowerMessage.includes('帮助')) return "我可以：\n1. 回答简单问题\n2. 介绍各种功能\n3. 提供天气、股票等信息";
+            
+            return localResponses[Math.floor(Math.random() * localResponses.length)];
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const btn = document.getElementById('chat-btn');
+            const container = document.getElementById('chat-container');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            input.value = '';
+            container.innerHTML += `<div class="chat-message chat-user">${message}</div>`;
+            chatMessages.push({ role: 'user', content: message });
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 思考中...';
+            container.innerHTML += `<div class="chat-message chat-assistant" id="typing"><i class="fas fa-ellipsis-h"></i> 正在思考...</div>`;
+            container.scrollTop = container.scrollHeight;
+            
+            try {
+                console.log('Sending message to AI...');
+                const response = await fetch(`${BASE_URL}/tools/execute?tool_id=groq.groqapi.chat.completions.create.v1.19d0750a`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                    body: JSON.stringify({ search_id: '', session_id: '', parameters: { model: 'meta-llama/llama-4-maverick-17b-128e-instruct', messages: chatMessages, max_tokens: 500 }, max_response_size: 20480 })
+                });
+                const data = await response.json();
+                console.log('AI Response:', data);
+                
+                document.getElementById('typing').remove();
+                
+                // 检查是否成功
+                if (data.success && data.result?.data?.choices?.length > 0) {
+                    const choices = data.result.data.choices;
+                    const content = choices[0]?.message?.content || '';
+                    
+                    if (content) {
+                        container.innerHTML += `<div class="chat-message chat-assistant">${content}</div>`;
+                        chatMessages.push({ role: 'assistant', content: content });
+                        return;
+                    }
+                }
+                
+                // 如果API失败，使用本地备用回复
+                console.log('API failed, using local response');
+                const localReply = getLocalResponse(message);
+                container.innerHTML += `<div class="chat-message chat-assistant">${localReply}</div>`;
+                chatMessages.push({ role: 'assistant', content: localReply });
+                
+            } catch (error) {
+                console.error('Chat error:', error);
+                document.getElementById('typing').remove();
+                // 使用本地回复
+                const localReply = getLocalResponse(message);
+                container.innerHTML += `<div class="chat-message chat-assistant">${localReply}</div>`;
+                chatMessages.push({ role: 'assistant', content: localReply });
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '发送';
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+        
+        // ========== 新闻API ==========
+        async function fetchNews() {
+            const content = document.getElementById('news-content');
+            content.innerHTML = '<div class="loading"><div class="spinner"></div><p>加载中...</p></div>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/tools/execute?tool_id=newsdata.news.search.v1.b65ccc56`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                    body: JSON.stringify({ search_id: '', session_id: '', parameters: { q: 'technology AI', language: 'en', size: 6 }, max_response_size: 20480 })
+                });
+                const data = await response.json();
+                
+                if (data.success && data.result?.data?.results) {
+                    const articles = data.result.data.results;
+                    content.innerHTML = articles.map(a => `
+                        <div class="news-item" onclick="window.open('${a.link || a.url}', '_blank')">
+                            <div class="news-title">${a.title || '无标题'}</div>
+                            <div class="news-meta">
+                                <span>${a.source?.toUpperCase() || '未知来源'}</span>
+                                <span>${a.pubDate ? new Date(a.pubDate).toLocaleDateString() : ''}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    content.innerHTML = '<p style="text-align: center; color: #ff6b6b;">新闻加载失败</p>';
+                }
+            } catch (error) {
+                console.error('News error:', error);
+                content.innerHTML = '<p style="text-align: center; color: #ff6b6b;">新闻加载失败</p>';
+            }
+        }
+        
+        // ========== 汇率API ==========
+        async function fetchRates() {
+            const content = document.getElementById('rates-content');
+            content.innerHTML = '<div class="loading"><div class="spinner"></div><p>加载中...</p></div>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/tools/execute?tool_id=frankfurter.exchange_rates.retrieve_latest.v1`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                    body: JSON.stringify({ search_id: '', session_id: '', parameters: { from: 'USD', to: 'CNY,EUR,JPY,GBP' }, max_response_size: 20480 })
+                });
+                const data = await response.json();
+                
+                if (data.success && data.result?.data?.rates) {
+                    const rates = data.result.data.rates;
+                    const base = data.result.data.amount || 1;
+                    content.innerHTML = Object.entries(rates).map(([currency, rate]) => `
+                        <div class="rate-item">
+                            <div class="rate-pair">
+                                <div class="rate-icon">${currency.slice(0, 2)}</div>
+                                <div>
+                                    <div style="font-weight: bold;">USD/${currency}</div>
+                                    <div style="font-size: 0.8em; color: #888;">${base} USD = ${(base * rate).toFixed(2)} ${currency}</div>
+                                </div>
+                            </div>
+                            <div class="rate-value">${rate.toFixed(4)}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    content.innerHTML = '<p style="text-align: center; color: #ff6b6b;">汇率加载失败</p>';
+                }
+            } catch (error) {
+                console.error('Rates error:', error);
+                content.innerHTML = '<p style="text-align: center; color: #ff6b6b;">汇率加载失败</p>';
+            }
+        }
+        
+        // ========== 位置API ==========
+        async function fetchLocation() {
+            const content = document.getElementById('location-content');
+            content.innerHTML = '<div class="loading"><div class="spinner"></div><p>加载中...</p></div>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/tools/execute?tool_id=baidu_map.ip_location.retrieve.v1`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                    body: JSON.stringify({ search_id: '', session_id: '', parameters: {}, max_response_size: 20480 })
+                });
+                const data = await response.json();
+                
+                if (data.success && data.result?.data) {
+                    const loc = data.result.data;
+                    content.innerHTML = `
+                        <div class="location-item"><div class="location-icon"><i class="fas fa-globe"></i></div><div><div class="location-label">国家</div><div class="location-value">${loc.country || '未知'}</div></div></div>
+                        <div class="location-item"><div class="location-icon"><i class="fas fa-map"></i></div><div><div class="location-label">省份</div><div class="location-value">${loc.province || '未知'}</div></div></div>
+                        <div class="location-item"><div class="location-icon"><i class="fas fa-city"></i></div><div><div class="location-label">城市</div><div class="location-value">${loc.city || '未知'}</div></div></div>
+                        <div class="location-item"><div class="location-icon"><i class="fas fa-network-wired"></i></div><div><div class="location-label">运营商</div><div class="location-value">${loc.isp || '未知'}</div></div></div>
+                        <div class="location-item"><div class="location-icon"><i class="fas fa-desktop"></i></div><div><div class="location-label">IP地址</div><div class="location-value">${loc.ip || '未知'}</div></div></div>
+                    `;
+                } else {
+                    content.innerHTML = '<p style="text-align: center; color: #ff6b6b;">位置加载失败</p>';
+                }
+            } catch (error) {
+                console.error('Location error:', error);
+                content.innerHTML = '<p style="text-align: center; color: #ff6b6b;">位置加载失败</p>';
+            }
+        }
+        
+        // ========== 图片生成API ==========
+        async function generateImage() {
+            const prompt = document.getElementById('image-prompt').value.trim();
+            const size = document.getElementById('image-size').value;
+            const result = document.getElementById('image-result');
+            
+            if (!prompt) {
+                alert('请输入图片描述');
+                return;
+            }
+            
+            result.innerHTML = '<div class="loading"><div class="spinner"></div><p>生成中... (可能需要10-30秒)</p></div>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/tools/execute?tool_id=bigmodel.images.generation.create.v1`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                    body: JSON.stringify({ search_id: '', session_id: '', parameters: { model: 'cogview-3', prompt: prompt, size: size.replace('*', 'x') }, max_response_size: 102400 })
+                });
+                const data = await response.json();
+                
+                console.log('Image generation response:', data);
+                
+                // 解析返回的URL (数据结构: result.data.data[0].url)
+                let imageUrl = null;
+                if (data.success && data.result?.data?.data?.[0]?.url) {
+                    imageUrl = data.result.data.data[0].url;
+                } else if (data.success && data.result?.data?.url) {
+                    imageUrl = data.result.data.url;
+                } else if (data.success && data.result?.data?.image_url) {
+                    imageUrl = data.result.data.image_url;
+                }
+                
+                if (imageUrl) {
+                    result.innerHTML = `
+                        <div class="image-result">
+                            <p style="text-align: center; margin-bottom: 10px; color: #00b894;">✅ 图片生成成功!</p>
+                            <img src="${imageUrl}" class="generated-image" style="max-width: 100%; border-radius: 10px; cursor: pointer; display: block; margin: 0 auto;" onclick="window.open('${imageUrl}', '_blank')">
+                            <p style="text-align: center; margin-top: 10px; font-size: 0.8em; color: #888;">点击图片查看大图</p>
+                        </div>
+                    `;
+                } else {
+                    const errorMsg = data.error_message || data.result?.error?.message || '未返回图片URL';
+                    result.innerHTML = `
+                        <p style="text-align: center; color: #ff6b6b;">❌ 图片生成失败</p>
+                        <p style="text-align: center; font-size: 0.8em; color: #888;">${errorMsg}</p>
+                        <p style="text-align: center; font-size: 0.8em; color: #888;">耗时: ${data.elapsed_time_ms?.toFixed(0) || 0}ms</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('Image error:', error);
+                result.innerHTML = `
+                    <p style="text-align: center; color: #ff6b6b;">❌ 图片生成失败</p>
+                    <p style="text-align: center; font-size: 0.8em; color: #888;">错误: ${error.message}</p>
+                `;
+            }
+        }
+        
+        // ========== API探索器 ==========
+        let currentSearchId = '';
+        
+        // 热门搜索关键词
+        const popularKeywords = [
+            { name: '天气', keyword: 'weather', icon: '☀️' },
+            { name: '股票', keyword: 'stock', icon: '📈' },
+            { name: 'AI', keyword: 'AI machine learning', icon: '🤖' },
+            { name: '新闻', keyword: 'news', icon: '📰' },
+            { name: '翻译', keyword: 'translation', icon: '🌐' },
+            { name: '地图', keyword: 'map location', icon: '🗺️' },
+            { name: '图片', keyword: 'image generation', icon: '🎨' },
+            { name: '金融', keyword: 'finance forex', icon: '💱' }
+        ];
+        
+        async function searchTools(keyword = null) {
+            // 如果传入了关键词，直接使用；否则从输入框获取
+            let query = '';
+            if (keyword !== null) {
+                query = keyword;
+                // 更新输入框
+                document.getElementById('tool-search').value = keyword;
+            } else {
+                query = document.getElementById('tool-search').value.trim();
+            }
+            
+            // 如果还是没有输入，显示热门分类
+            if (!query) {
+                const list = document.getElementById('tools-list');
+                list.innerHTML = `
+                    <div style="text-align: center; padding: 20px;">
+                        <p style="font-size: 1.2em; margin-bottom: 20px;">🔍 探索 Qveris 工具</p>
+                        <p style="color: #888; margin-bottom: 20px;">选择分类开始搜索:</p>
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; max-width: 600px; margin: 0 auto;">
+                            ${popularKeywords.map(kw => `
+                                <button onclick="searchTools('${kw.keyword}')" style="padding: 15px 10px; background: rgba(102, 126, 234, 0.15); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 12px; color: #fff; cursor: pointer; transition: all 0.3s ease;">
+                                    <div style="font-size: 1.5em; margin-bottom: 5px;">${kw.icon}</div>
+                                    <div style="font-size: 0.9em;">${kw.name}</div>
+                                </button>
+                            `).join('')}
+                        </div>
+                        <p style="color: #888; margin-top: 20px; font-size: 0.9em;">或在上方输入框中输入关键词搜索</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const list = document.getElementById('tools-list');
+            list.innerHTML = `
+                <div style="text-align: center; padding: 30px;">
+                    <div class="spinner" style="margin: 0 auto 15px;"></div>
+                    <p>搜索 "${query}" 中...</p>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch(`${BASE_URL}/search`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                    body: JSON.stringify({ query: query, limit: 12 })
+                });
+                const data = await response.json();
+                console.log('Search response:', data);
+                
+                // Qveris API返回格式: { total: X, results: [...], search_id: "xxx" }
+                // 注意: success字段可能是null，但results数组一定存在
+                if (data.results && data.results.length > 0) {
+                    currentSearchId = data.search_id || '';
+                    const total = data.total || data.results.length;
+                    
+                    list.innerHTML = `
+                        <div style="margin-bottom: 15px; padding: 10px 15px; background: rgba(0, 184, 148, 0.1); border-radius: 10px; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: #00b894;">
+                                ✅ 找到 <strong style="font-size: 1.2em;">${total}</strong> 个相关工具
+                            </span>
+                            <span style="color: #888; font-size: 0.85em;">
+                                搜索: "${query}"
+                            </span>
+                        </div>
+                        ${data.results.map(t => {
+                            const params = t.examples?.sample_parameters || {};
+                            const paramStr = JSON.stringify(params).replace(/"/g, '&quot;');
+                            return `
+                                <div class="tool-item" onclick='executeTool("${t.tool_id}", ${paramStr})'>
+                                    <div class="tool-name">
+                                        <i class="fas fa-cube"></i> 
+                                        ${t.name || '未知工具'}
+                                    </div>
+                                    <div class="tool-desc">
+                                        ${(t.description || '无描述').replace(/<[^>]*>/g, '').slice(0, 250)}...
+                                    </div>
+                                    <div class="tool-meta">
+                                        <span title="提供商"><i class="fas fa-building"></i> ${(t.provider_description || '').split('.')[0] || '未知'}</span>
+                                        ${t.stats ? `<span title="平均响应时间"><i class="fas fa-bolt"></i> ${t.stats.avg_execution_time_ms?.toFixed(0) || 0}ms</span>` : ''}
+                                        ${t.stats !== undefined ? `<span title="成功率">📊 ${(t.stats.success_rate * 100).toFixed(0)}%</span>` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                        <div style="text-align: center; margin-top: 20px; padding: 15px; background: rgba(102, 126, 234, 0.1); border-radius: 10px;">
+                            <p style="color: #888; font-size: 0.9em; margin-bottom: 10px;">💡 点击工具查看详情并执行</p>
+                            <p style="color: #666; font-size: 0.8em;">工具来自 Qveris 平台，共收录 1000+ API 工具</p>
+                        </div>
+                    `;
+                } else {
+                    // 如果没有搜索结果，显示建议
+                    list.innerHTML = `
+                        <div style="text-align: center; padding: 20px;">
+                            <p style="font-size: 2em; margin-bottom: 10px;">🔍</p>
+                            <p style="color: #f39c12; font-size: 1.1em; margin-bottom: 15px;">
+                                未找到 "${query}" 相关工具
+                            </p>
+                            <p style="color: #888; margin-bottom: 20px;">试试这些热门搜索:</p>
+                            <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 25px;">
+                                ${popularKeywords.map(kw => `
+                                    <button onclick="searchTools('${kw.keyword}')" style="padding: 10px 18px; background: rgba(102, 126, 234, 0.2); border: 1px solid rgba(102, 126, 234, 0.5); border-radius: 20px; color: #fff; cursor: pointer; transition: all 0.3s ease; font-size: 0.9em;">
+                                        ${kw.icon} ${kw.name}
+                                    </button>
+                                `).join('')}
+                            </div>
+                            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+                                <p style="color: #888; margin-bottom: 10px;">💡 搜索提示:</p>
+                                <ul style="text-align: left; color: #888; font-size: 0.85em; max-width: 400px; margin: 0 auto; padding-left: 20px;">
+                                    <li>使用更通用的关键词</li>
+                                    <li>尝试英文关键词</li>
+                                    <li>使用类别名称，如 "weather", "finance"</li>
+                                </ul>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+                list.innerHTML = `
+                    <div style="text-align: center; padding: 30px;">
+                        <p style="color: #ff6b6b; font-size: 2em; margin-bottom: 15px;">❌</p>
+                        <p style="color: #ff6b6b; font-size: 1.1em;">搜索失败</p>
+                        <p style="color: #888; margin: 15px 0;">${error.message}</p>
+                        <button onclick="searchTools('popular')" style="padding: 10px 20px; background: #667eea; border: none; color: #fff; border-radius: 8px; cursor: pointer;">
+                            查看热门工具
+                        </button>
+                    </div>
+                `;
+            }
+            } catch (error) {
+                console.error('Search error:', error);
+                list.innerHTML = `
+                    <p style="text-align: center; color: #ff6b6b;">❌ 搜索失败</p>
+                    <p style="text-align: center; font-size: 0.85em; color: #888;">${error.message}</p>
+                    <button onclick="searchTools('popular')" style="margin-top: 15px; padding: 10px 20px; background: #667eea; border: none; color: #fff; border-radius: 8px; cursor: pointer;">
+                        显示热门工具
+                    </button>
+                `;
+            }
+        }
+        
+        async function executeTool(toolId, params) {
+            const modal = document.getElementById('result-modal');
+            const body = document.getElementById('modal-body');
+            modal.classList.add('show');
+            body.innerHTML = `
+                <div style="text-align: center; padding: 40px;">
+                    <div class="spinner" style="margin: 0 auto 15px;"></div>
+                    <p>正在执行工具...</p>
+                    <p style="font-size: 0.85em; color: #888; margin-top: 10px;">
+                        Tool ID: ${toolId}
+                    </p>
+                </div>
+            `;
+            
+            try {
+                console.log('Executing tool:', toolId, params);
+                const response = await fetch(`${BASE_URL}/tools/execute?tool_id=${toolId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                    body: JSON.stringify({ 
+                        search_id: currentSearchId, 
+                        session_id: '', 
+                        parameters: params, 
+                        max_response_size: 102400 
+                    })
+                });
+                const data = await response.json();
+                console.log('Execute response:', data);
+                
+                // 解析结果
+                let resultContent = '';
+                let success = false;
+                
+                if (data.success !== false && data.result) {
+                    // 成功情况
+                    success = true;
+                    const content = data.result.data || data.result;
+                    
+                    // 美化JSON输出
+                    if (typeof content === 'object') {
+                        resultContent = `<pre style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; overflow-x: auto; font-size: 0.8em; text-align: left;">${JSON.stringify(content, null, 2)}</pre>`;
+                    } else {
+                        resultContent = `<p>${content}</p>`;
+                    }
+                } else {
+                    // 失败情况
+                    success = false;
+                    resultContent = `<p style="color: #ff6b6b;">${data.error_message || data.result?.error?.message || '执行失败'}</p>`;
+                }
+                
+                body.innerHTML = `
+                    <div style="margin-bottom: 20px;">
+                        <h4 style="margin-bottom: 10px;">
+                            <i class="fas ${success ? 'fa-check-circle' : 'fa-times-circle'}" style="color: ${success ? '#00b894' : '#ff6b6b'}; margin-right: 8px;"></i>
+                            ${success ? '执行成功' : '执行失败'}
+                        </h4>
+                        <p style="font-size: 0.85em; color: #888;">
+                            Tool: <code style="background: rgba(102, 126, 234, 0.2); padding: 2px 6px; border-radius: 4px;">${toolId}</code>
+                        </p>
+                        <p style="font-size: 0.85em; color: #888;">
+                            耗时: ${data.elapsed_time_ms ? (data.elapsed_time_ms / 1000).toFixed(2) + '秒' : '未知'}
+                        </p>
+                    </div>
+                    ${resultContent}
+                    <button onclick="closeModal()" style="margin-top: 20px; padding: 10px 25px; background: #667eea; border: none; color: #fff; border-radius: 8px; cursor: pointer;">
+                        关闭
+                    </button>
+                `;
+            } catch (error) {
+                console.error('Execute error:', error);
+                body.innerHTML = `
+                    <p style="color: #ff6b6b; font-size: 1.1em; margin-bottom: 15px;">
+                        <i class="fas fa-exclamation-triangle"></i> 执行出错
+                    </p>
+                    <p style="color: #888;">${error.message}</p>
+                    <button onclick="closeModal()" style="margin-top: 20px; padding: 10px 25px; background: #667eea; border: none; color: #fff; border-radius: 8px; cursor: pointer;">
+                        关闭
+                    </button>
+                `;
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('result-modal').classList.remove('show');
+        }
+        
+        // 初始加载
+        window.onload = function() {
+            fetchWeather();
+            fetchStock();
+            fetchNews();
+            fetchRates();
+            fetchLocation();
+            searchTools();
+        };
+    </script>
+</body>
+</html>

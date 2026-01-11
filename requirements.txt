@@ -1,0 +1,7 @@
+# 如果需要使用 Python HTTP 服务器
+# Python 3 已内置 http.server，无需额外安装
+# 但如果想要增强功能，可以添加：
+
+# 可选：更好的服务器
+flask==3.0.0
+waitress==2.1.2

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天气测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            max-width: 400px;
+            width: 90%;
+        }
+        button {
+            background: #667eea;
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            white-space: pre-wrap;
+            font-size: 12px;
+            max-height: 300px;
+            overflow: auto;
+        }
+        .success { color: #00b894; }
+        .error { color: #ff6b6b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🌤️ 天气API测试</h2>
+        <button onclick="testWeather()">测试天气API</button>
+        <button onclick="clearResult()">清除结果</button>
+        <div class="result" id="result">点击按钮开始测试...</div>
+    </div>
+
+    <script>
+        const API_KEY = 'sk-VeJWtelcfNcqgm6H-V_TfkWX4Or2IyskjXqBvBszQ-k';
+        
+        function log(message, isError = false) {
+            const result = document.getElementById('result');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = isError ? 'error' : 'success';
+            result.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>\n`;
+            result.scrollTop = result.scrollHeight;
+        }
+        
+        function clearResult() {
+            document.getElementById('result').innerHTML = '清除完毕...\n';
+        }
+        
+        async function testWeather() {
+            log('开始测试天气API...');
+            
+            try {
+                log('发送请求到 Qveris API...');
+                const response = await fetch('https://qveris.ai/api/v1/tools/execute?tool_id=weather_api.current.retrieve.v1.dca6c0f0', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + API_KEY
+                    },
+                    body: JSON.stringify({
+                        search_id: '',
+                        session_id: '',
+                        parameters: {
+                            q: 'Beijing',
+                            aqi: 'yes'
+                        },
+                        max_response_size: 20480
+                    })
+                });
+                
+                log(`响应状态: ${response.status} ${response.statusText}`);
+                
+                const data = await response.json();
+                log(`API调用成功: ${data.success}`);
+                
+                if (data.result && data.result.data) {
+                    const current = data.result.data.current;
+                    log(`✅ 成功获取天气数据!`, false);
+                    log(`📍 位置: ${data.result.data.location.name}`, false);
+                    log(`🌡️ 温度: ${current.temp_c}°C`, false);
+                    log(`💧 湿度: ${current.humidity}%`, false);
+                    log(`☁️ 天气: ${current.condition.text}`, false);
+                    log(`🌬️ 空气质量: ${current.air_quality?.['us-epa-index'] || 'N/A'}`, false);
+                } else {
+                    log(`❌ 未返回有效数据`, true);
+                    log(`错误信息: ${JSON.stringify(data)}`, true);
+                }
+            } catch (error) {
+                log(`❌ 请求失败: ${error.message}`, true);
+                log(`错误详情: ${error.stack}`, true);
+            }
+        }
+    </script>
+</body>
+</html>
